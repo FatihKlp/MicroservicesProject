@@ -1,0 +1,59 @@
+# PRODUCTS
+### Get all products
+GET http://localhost:5021/api/products
+
+### Get product by id
+GET http://localhost:5021/api/products/1
+
+### Create product (login required → add Bearer token)
+POST http://localhost:5021/api/products
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Laptop",
+  "price": 1500
+}
+
+### Update product
+PUT http://localhost:5021/api/products/1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Updated Laptop",
+  "price": 1600
+}
+
+### Delete product (Admin only)
+DELETE http://localhost:5021/api/products/1
+Authorization: Bearer {{adminToken}}
+
+# CATEGORIES
+### Get categories
+GET http://localhost:5021/api/categories
+
+### Get category by id
+GET http://localhost:5021/api/categories/1
+
+### Create category (Admin only)
+POST http://localhost:5021/api/categories
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "Electronics"
+}
+
+### Update category
+PUT http://localhost:5021/api/categories/1
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "Updated Electronics"
+}
+
+### Delete category
+DELETE http://localhost:5021/api/categories/1
+Authorization: Bearer {{adminToken}}

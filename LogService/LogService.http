@@ -1,0 +1,12 @@
+### Get all logs
+GET http://localhost:5099/api/logs
+
+### Add log (internal usage)
+POST http://localhost:5099/api/logs
+Content-Type: application/json
+
+{
+  "level": "INFO",
+  "message": "Manual log test",
+  "timestamp": "2025-08-23T14:00:00Z"
+}
