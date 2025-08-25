@@ -1,9 +1,10 @@
-// Controllers/CategoriesController.cs
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ProductService.Models;
-using ProductService.Interfaces;
+using ProductService.CQRS.Commands.Categories;
+using ProductService.CQRS.Queries.Categories;
 using Shared.DTOs;
+using Shared.Interfaces;
 
 namespace ProductService.Controllers
 {
@@ -11,28 +12,26 @@ namespace ProductService.Controllers
     [Route("api/[controller]")]
     public class CategoriesController : ControllerBase
     {
-        private readonly ICategoryService _service;
+        private readonly IMediator _mediator;
+        private readonly ILogServiceClient _logService;
 
-        public CategoriesController(ICategoryService service)
+        public CategoriesController(IMediator mediator, ILogServiceClient logService)
         {
-            _service = service;
+            _mediator = mediator;
+            _logService = logService;
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<CategoryWithProductsDto>>> GetCategories()
         {
-            var categories = await _service.GetAllAsync();
+            var result = await _mediator.Send(new GetCategoriesQuery());
 
-            var result = categories.Select(c => new CategoryWithProductsDto
+            await _logService.SendLogAsync(new LogEntryDto
             {
-                Id = c.Id,
-                Name = c.Name,
-                Products = c.Products.Select(p => new ProductDto
-                {
-                    Id = p.Id,
-                    Name = p.Name,
-                    Price = p.Price
-                }).ToList()
+                Service = "ProductService",
+                Level = "Info",
+                Message = $"Fetched {result.Count()} categories",
+                UserId = User?.Identity?.Name
             });
 
             return Ok(result);
@@ -41,32 +40,44 @@ namespace ProductService.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<CategoryWithProductsDto>> GetCategoryById(int id)
         {
-            var category = await _service.GetByIdAsync(id);
-            if (category == null) return NotFound();
-
-            var result = new CategoryWithProductsDto
+            var result = await _mediator.Send(new GetCategoryByIdQuery(id));
+            if (result == null)
             {
-                Id = category.Id,
-                Name = category.Name,
-                Products = category.Products.Select(p => new ProductDto
+                await _logService.SendLogAsync(new LogEntryDto
                 {
-                    Id = p.Id,
-                    Name = p.Name,
-                    Price = p.Price
-                }).ToList()
-            };
+                    Service = "ProductService",
+                    Level = "Warning",
+                    Message = $"Category with id {id} not found",
+                    UserId = User?.Identity?.Name
+                });
+                return NotFound();
+            }
+
+            await _logService.SendLogAsync(new LogEntryDto
+            {
+                Service = "ProductService",
+                Level = "Info",
+                Message = $"Category fetched: {result.Name}",
+                UserId = User?.Identity?.Name
+            });
 
             return Ok(result);
         }
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<ActionResult<Category>> CreateCategory([FromBody] CategoryCreateDto dto)
+        public async Task<ActionResult<CategoryDto>> CreateCategory([FromBody] CategoryCreateDto dto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            var created = await _mediator.Send(new CreateCategoryCommand(dto));
 
-            var created = await _service.CreateAsync(dto.Name);
+            await _logService.SendLogAsync(new LogEntryDto
+            {
+                Service = "ProductService",
+                Level = "Info",
+                Message = $"Category created: {created.Name}",
+                UserId = User?.Identity?.Name
+            });
+
             return CreatedAtAction(nameof(GetCategoryById), new { id = created.Id }, created);
         }
 
@@ -74,11 +85,27 @@ namespace ProductService.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateCategory(int id, [FromBody] CategoryCreateDto dto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            var success = await _mediator.Send(new UpdateCategoryCommand(id, dto));
+            if (!success)
+            {
+                await _logService.SendLogAsync(new LogEntryDto
+                {
+                    Service = "ProductService",
+                    Level = "Warning",
+                    Message = $"Failed to update category {id}",
+                    UserId = User?.Identity?.Name
+                });
+                return NotFound();
+            }
 
-            var success = await _service.UpdateAsync(id, dto.Name);
-            if (!success) return NotFound();
+            await _logService.SendLogAsync(new LogEntryDto
+            {
+                Service = "ProductService",
+                Level = "Info",
+                Message = $"Category updated: {id}",
+                UserId = User?.Identity?.Name
+            });
+
             return NoContent();
         }
 
@@ -86,8 +113,27 @@ namespace ProductService.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteCategory(int id)
         {
-            var success = await _service.DeleteAsync(id);
-            if (!success) return BadRequest("Cannot delete category.");
+            var success = await _mediator.Send(new DeleteCategoryCommand(id));
+            if (!success)
+            {
+                await _logService.SendLogAsync(new LogEntryDto
+                {
+                    Service = "ProductService",
+                    Level = "Warning",
+                    Message = $"Failed to delete category {id}",
+                    UserId = User?.Identity?.Name
+                });
+                return BadRequest("Cannot delete category.");
+            }
+
+            await _logService.SendLogAsync(new LogEntryDto
+            {
+                Service = "ProductService",
+                Level = "Info",
+                Message = $"Category deleted: {id}",
+                UserId = User?.Identity?.Name
+            });
+
             return NoContent();
         }
     }

@@ -16,3 +16,7 @@ Content-Type: application/json
   "email": "fatih@example.com",
   "password": "123456"
 }
+
+# SWAGGER UI
+### Swagger UI
+GET http://localhost:5072/swagger

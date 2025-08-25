@@ -10,3 +10,7 @@ Content-Type: application/json
   "message": "Manual log test",
   "timestamp": "2025-08-23T14:00:00Z"
 }
+
+# SWAGGER UI
+### Swagger UI
+GET http://localhost:5099/

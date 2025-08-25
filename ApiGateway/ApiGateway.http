@@ -1,5 +1,7 @@
+# API GATEWAY - PORT 8080
+
 ### Auth register via Gateway
-POST http://localhost:5127/auth/register
+POST http://localhost:8080/auth/api/auth/register
 Content-Type: application/json
 
 {
@@ -9,7 +11,7 @@ Content-Type: application/json
 }
 
 ### Auth login via Gateway
-POST http://localhost:5127/auth/login
+POST http://localhost:8080/auth/api/auth/login
 Content-Type: application/json
 
 {
@@ -18,4 +20,23 @@ Content-Type: application/json
 }
 
 ### Products via Gateway
-GET http://localhost:5127/products
+GET http://localhost:8080/api/products
+
+### Get product by id via Gateway
+GET http://localhost:8080/api/products/1
+
+### Create product via Gateway (login required)
+POST http://localhost:8080/api/products
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Laptop",
+  "price": 1500
+}
+
+### Categories via Gateway
+GET http://localhost:8080/api/categories
+
+### Logs via Gateway
+GET http://localhost:8080/logs/api/logs

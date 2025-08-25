@@ -1,3 +1,4 @@
+// LogService/Program.cs
 using LogService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
@@ -14,7 +15,8 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<LogDbContext>(options =>
 {
     var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING")
-        ?? throw new InvalidOperationException("CONNECTION_STRING environment variable is not set");
+        ?? builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException("Database connection string is not configured");
     options.UseNpgsql(connectionString);
 });
 

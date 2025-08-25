@@ -1,3 +1,4 @@
+// AuthService/Program.cs
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -6,11 +7,20 @@ using System.Text;
 using AuthService.Data;
 using AuthService.Interfaces;
 using AuthService.Services;
+using AuthService.Middleware;
+using Shared.Interfaces;
+using Shared.Services;
 
 // .env dosyasını yükle
 DotNetEnv.Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Log Service
+builder.Services.AddHttpClient<ILogServiceClient, LogServiceClient>(client =>
+{
+    client.BaseAddress = new Uri("http://logservice:8080");
+});
 
 // Controllers
 builder.Services.AddControllers();
@@ -22,14 +32,19 @@ builder.Services.AddScoped<IPasswordService, PasswordService>();
 // DbContext (PostgreSQL) - Environment Variable'dan al
 builder.Services.AddDbContext<AppDbContext>(opt =>
 {
-    opt.UseNpgsql(Environment.GetEnvironmentVariable("CONNECTION_STRING"));
+    var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException("Database connection string is not configured");
+    opt.UseNpgsql(connectionString);
 });
 
 // JWT Ayarları - Environment Variables'dan al
 var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY")
-    ?? throw new InvalidOperationException("JWT_KEY environment variable is not set");
+    ?? builder.Configuration["Jwt:Key"]
+    ?? throw new InvalidOperationException("JWT Key is not configured");
 var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER")
-    ?? throw new InvalidOperationException("JWT_ISSUER environment variable is not set");
+    ?? builder.Configuration["Jwt:Issuer"]
+    ?? throw new InvalidOperationException("JWT Issuer is not configured");
 
 builder.Services.AddAuthentication(options =>
 {
@@ -81,6 +96,19 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+// Exception Handling Middleware
+app.UseExceptionHandlingMiddleware();
+
+// Otomatik migrasyon + Admin Seeding
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+
+    var passwordService = scope.ServiceProvider.GetRequiredService<IPasswordService>();
+    DbInitializer.Seed(db, passwordService);
+}
 
 if (app.Environment.IsDevelopment())
 {

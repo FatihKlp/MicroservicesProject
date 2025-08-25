@@ -1,12 +1,10 @@
-/// <summary>
-/// ProductsController, CRUD operations for products.
-/// </summary>
-// ProductService/Controllers/ProductsController.cs
-
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProductService.CQRS.Commands.Products;
+using ProductService.CQRS.Queries.Products;
 using Shared.DTOs;
-using ProductService.Interfaces;
+using Shared.Interfaces;
 
 namespace ProductService.Controllers
 {
@@ -14,11 +12,13 @@ namespace ProductService.Controllers
     [Route("api/[controller]")]
     public class ProductsController : ControllerBase
     {
-        private readonly IProductService _service;
+        private readonly IMediator _mediator;
+        private readonly ILogServiceClient _logService;
 
-        public ProductsController(IProductService service)
+        public ProductsController(IMediator mediator, ILogServiceClient logService)
         {
-            _service = service;
+            _mediator = mediator;
+            _logService = logService;
         }
 
         // GET: api/products
@@ -26,7 +26,17 @@ namespace ProductService.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ProductDto>>> GetProducts()
         {
-            return Ok(await _service.GetAllAsync());
+            var result = await _mediator.Send(new GetProductsQuery());
+
+            await _logService.SendLogAsync(new LogEntryDto
+            {
+                Service = "ProductService",
+                Level = "Info",
+                Message = $"Fetched {result.Count()} products",
+                UserId = User?.Identity?.Name
+            });
+
+            return Ok(result);
         }
 
         // GET: api/products/{id}
@@ -34,27 +44,74 @@ namespace ProductService.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<ProductDto>> GetProductById(int id)
         {
-            var product = await _service.GetByIdAsync(id);
-            if (product == null) return NotFound();
-            return Ok(product);
+            var result = await _mediator.Send(new GetProductByIdQuery(id));
+            if (result == null)
+            {
+                await _logService.SendLogAsync(new LogEntryDto
+                {
+                    Service = "ProductService",
+                    Level = "Warning",
+                    Message = $"Product with id {id} not found",
+                    UserId = User?.Identity?.Name
+                });
+                return NotFound();
+            }
+
+            await _logService.SendLogAsync(new LogEntryDto
+            {
+                Service = "ProductService",
+                Level = "Info",
+                Message = $"Product fetched: {result.Name}",
+                UserId = User?.Identity?.Name
+            });
+
+            return Ok(result);
         }
 
         // POST: api/products
         [Authorize]
         [HttpPost]
-        public async Task<ActionResult<ProductDto>> CreateProduct(ProductCreateDto productDto)
+        public async Task<ActionResult<ProductDto>> CreateProduct([FromBody] ProductCreateDto productDto)
         {
-            var created = await _service.CreateAsync(productDto);
-            return CreatedAtAction(nameof(GetProductById), new { id = created.Id }, created);
+            var result = await _mediator.Send(new CreateProductCommand(productDto));
+
+            await _logService.SendLogAsync(new LogEntryDto
+            {
+                Service = "ProductService",
+                Level = "Info",
+                Message = $"Product created: {result.Name}",
+                UserId = User?.Identity?.Name
+            });
+
+            return CreatedAtAction(nameof(GetProductById), new { id = result.Id }, result);
         }
 
         // PUT: api/products/{id}
         [Authorize]
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateProduct(int id, ProductCreateDto productDto)
+        public async Task<IActionResult> UpdateProduct(int id, [FromBody] ProductCreateDto productDto)
         {
-            var success = await _service.UpdateAsync(id, productDto);
-            if (!success) return NotFound();
+            var success = await _mediator.Send(new UpdateProductCommand(id, productDto));
+            if (!success)
+            {
+                await _logService.SendLogAsync(new LogEntryDto
+                {
+                    Service = "ProductService",
+                    Level = "Warning",
+                    Message = $"Failed to update product {id}",
+                    UserId = User?.Identity?.Name
+                });
+                return NotFound();
+            }
+
+            await _logService.SendLogAsync(new LogEntryDto
+            {
+                Service = "ProductService",
+                Level = "Info",
+                Message = $"Product updated: {id}",
+                UserId = User?.Identity?.Name
+            });
+
             return NoContent();
         }
 
@@ -63,8 +120,27 @@ namespace ProductService.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
-            var success = await _service.DeleteAsync(id);
-            if (!success) return NotFound();
+            var success = await _mediator.Send(new DeleteProductCommand(id));
+            if (!success)
+            {
+                await _logService.SendLogAsync(new LogEntryDto
+                {
+                    Service = "ProductService",
+                    Level = "Warning",
+                    Message = $"Failed to delete product {id}",
+                    UserId = User?.Identity?.Name
+                });
+                return NotFound();
+            }
+
+            await _logService.SendLogAsync(new LogEntryDto
+            {
+                Service = "ProductService",
+                Level = "Info",
+                Message = $"Product deleted: {id}",
+                UserId = User?.Identity?.Name
+            });
+
             return NoContent();
         }
     }

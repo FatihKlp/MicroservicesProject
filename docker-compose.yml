@@ -1,0 +1,112 @@
+services:
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  # ayrı Postgres DB'ler (her servis kendi db'sini kullanacak)
+  productdb:
+    image: postgres:15-alpine
+    container_name: productdb
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ProductServiceDb
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ProductServiceDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  authdb:
+    image: postgres:15-alpine
+    container_name: authdb
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: AuthServiceDb
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d AuthServiceDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  logdb:
+    image: postgres:15-alpine
+    container_name: logdb
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: LogServiceDb
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d LogServiceDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  productservice:
+    build:
+      context: .
+      dockerfile: ProductService/Dockerfile
+    container_name: productservice
+    depends_on:
+      productdb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - ./ProductService/.env
+    ports:
+      - "5021:8080"
+    restart: on-failure
+
+  authservice:
+    build:
+      context: .
+      dockerfile: AuthService/Dockerfile
+    container_name: authservice
+    depends_on:
+      authdb:
+        condition: service_healthy
+    env_file:
+      - ./AuthService/.env
+    ports:
+      - "5072:8080"
+    restart: on-failure
+
+  logservice:
+    build:
+      context: .
+      dockerfile: LogService/Dockerfile
+    container_name: logservice
+    depends_on:
+      logdb:
+        condition: service_healthy
+    env_file:
+      - ./LogService/.env
+    ports:
+      - "5099:8080"
+    restart: on-failure
+
+  apigateway:
+    build:
+      context: .
+      dockerfile: ApiGateway/Dockerfile
+    container_name: apigateway
+    depends_on:
+      productservice:
+        condition: service_started
+      authservice:
+        condition: service_started
+      logservice:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    restart: on-failure
